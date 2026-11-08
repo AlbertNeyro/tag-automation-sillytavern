@@ -1,0 +1,32 @@
+.ta-panel {
+    margin: 12px 0;
+    padding: 12px;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.35));
+    border-radius: 8px;
+}
+.ta-panel h3 { margin: 0 0 6px; }
+.ta-panel h4 { margin: 14px 0 7px; }
+.ta-muted { opacity: .75; font-size: .9em; }
+.ta-status { margin: 8px 0; }
+.ta-suggestions, .ta-metadata {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin: 8px 0;
+}
+.ta-tag-option, .ta-check-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.35));
+    border-radius: 6px;
+    cursor: pointer;
+}
+.ta-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 8px;
+}
+.ta-panel button { margin: 2px 0; }
