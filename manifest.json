@@ -1,0 +1,11 @@
+{
+  "display_name": "Tag Automation",
+  "loading_order": 10,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
+  "css": "style.css",
+  "author": "AlbertNeyro",
+  "version": "1.0.0",
+  "homePage": "https://github.com/AlbertNeyro/tag-automation-sillytavern"
+}
