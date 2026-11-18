@@ -32,3 +32,81 @@ function build(){
 function init(){build();new MutationObserver(build).observe(document.body,{childList:true,subtree:true});const x=ctx();if(x?.eventSource&&x.eventTypes?.APP_READY)x.eventSource.on(x.eventTypes.APP_READY,build);}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
+
+(() => {
+'use strict';
+const ROOT='ta-content-studio';
+const getCtx=()=>window.SillyTavern?.getContext?.();
+const getChars=()=>getCtx()?.characters?.filter(c=>c?.avatar)||[];
+const cardData=c=>c.data||c;
+const charName=c=>c.name||cardData(c).name||c.avatar;
+const el=(tag,cls,txt)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(txt!==undefined)n.textContent=txt;return n;};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const defaults={
+note:'Create a creator note for {character_name}. Return only JSON with keys subtitle, appearance, behavior, tagline. Make every detail specific to this character and supported by the card. Appearance should describe visual design and clothing; behavior should describe personality and social manner.',
+description:'Rewrite the character description for {character_name}. Improve clarity, flow, and specificity while preserving all established facts and the original intent. Do not invent details. Return only the revised description.',
+summary:'Write a nuanced personality summary for {character_name} in this style: Applejack is grounded, pragmatic, and duty-oriented. She prioritizes honesty and reliability, functioning as a stabilizing force within the group. Her worldview is shaped by labor, family, and tradition, which makes her resilient but also resistant to nuance or ambiguity. She can become stubborn, overburden herself out of responsibility, and occasionally impose her values on others, but her moral consistency and endurance make her highly dependable. Return one paragraph.'
+};
+const prompts={...defaults}, drafts=new Map();
+function makeHTML(c,o){
+ const img='characters/'+String(c.avatar).split('/').map(encodeURIComponent).join('/');
+ return '<div style="background:linear-gradient(to bottom, rgba(40,40,45,0.9), rgba(20,20,25,0.9));backdrop-filter:blur(5px);border-radius:10px;border:1px solid rgba(255,255,255,0.2);box-shadow:0px 0px 20px rgba(0,0,0,0.6);margin:20px 0;padding:20px;color:#e6e6e6;font-family:sans-serif">'+
+ '<p style="text-align:center;font-size:2em;font-weight:bold;margin:0.5em 0">'+esc(charName(c))+'</p>'+
+ '<p style="text-align:center;font-size:1.2em;font-weight:bold;margin:0 0 1em 0">'+esc(o.subtitle)+'</p>'+
+ '<img src="'+img+'" alt="'+esc(charName(c))+'" style="display:block;margin:0 auto 1em auto;max-width:100%;border-radius:8px;">'+
+ '<hr style="border:1px solid rgba(255,255,255,0.2);margin:1em 0"><p>'+esc(o.appearance)+'</p><p>'+esc(o.behavior)+'</p>'+
+ '<p style="text-align:center;font-weight:bold">'+esc(o.tagline)+'</p>'+
+ '<hr style="border:1px solid rgba(255,255,255,0.2);margin:1em 0"></div>';
+}
+function parseJSON(raw){let s=String(raw||'').trim();const a=s.indexOf('{'),b=s.lastIndexOf('}');if(a<0||b<a)throw Error('The AI did not return the required JSON object.');return JSON.parse(s.slice(a,b+1));}
+async function save(c,fields){const x=getCtx();const r=await fetch('/api/characters/merge-attributes',{method:'POST',headers:x.getRequestHeaders(),body:JSON.stringify({avatar:c.avatar,...fields})});if(!r.ok)throw Error((await r.text())||'Character update failed.');await x.getOneCharacter(c.avatar);if(x.eventSource&&x.eventTypes?.CHARACTER_EDITED){const id=x.characters.findIndex(v=>v.avatar===c.avatar);await x.eventSource.emit(x.eventTypes.CHARACTER_EDITED,{detail:{id,character:x.characters[id]}});}}
+function install(){
+ const host=document.getElementById('tag-automation-panel');if(!host||document.getElementById(ROOT))return;
+ const box=el('section','ta-section');box.id=ROOT;
+ const h=el('div','ta-section-heading'),copy=el('div');h.append(el('span','ta-step','05'),copy);copy.append(el('h4','','Creator notes & character writing'),el('p','ta-muted','Generate drafts, edit them, preview the HTML, and explicitly approve each change before saving.'));box.append(h);
+ const promptDetails=el('details','ta-settings'),promptSummary=el('summary','','Edit generation prompts');promptDetails.append(promptSummary);
+ [['note','Creator note prompt'],['description','Description prompt'],['summary','Personality summary prompt']].forEach(([k,label])=>{const wrap=el('label','ta-field ta-prompt-field');wrap.append(el('span','',label));const ta=el('textarea','text_pole');ta.rows=4;ta.value=prompts[k];ta.addEventListener('change',()=>prompts[k]=ta.value);wrap.append(ta);promptDetails.append(wrap);});box.append(promptDetails);
+ const generate=el('button','menu_button ta-button ta-button-primary','Generate drafts for selected characters'),result=el('div','ta-content-results'),apply=el('button','menu_button ta-button ta-button-primary','Save approved changes'),status=el('div','ta-status','No drafts generated yet.');status.setAttribute('role','status');box.append(generate,result,apply,status);host.append(box);
+ function selected(){return [...host.querySelectorAll('.ta-character input:checked')].map(i=>i.closest('.ta-character')?.querySelector('.ta-character-name')?.textContent).filter(Boolean);}
+ function draw(){
+  result.replaceChildren();
+  drafts.forEach((d,id)=>{const c=getChars().find(x=>x.avatar===id);const card=el('article','ta-content-card');card.dataset.avatar=id;card.append(el('h4','',d.name));if(d.error){card.append(el('p','ta-error',d.error));result.append(card);return;}
+   [['note','Creator note HTML',8],['description','Character description',5],['summary','Personality summary',4]].forEach(([key,label,rows])=>{
+    const group=el('div','ta-review-field'),head=el('div','ta-review-heading'),check=el('input');check.type='checkbox';check.className='ta-approve';check.dataset.field=key;
+    const approved=el('span','ta-review-state','Not approved');head.append(check,el('strong','',label),approved);
+    const ta=el('textarea','text_pole ta-review-text');ta.rows=rows;ta.value=d[key];ta.dataset.field=key;ta.addEventListener('input',()=>{d[key]=ta.value;const frame=group.querySelector('iframe');if(frame)frame.srcdoc=ta.value;});
+    check.addEventListener('change',()=>approved.textContent=check.checked?'Approved':'Not approved');group.append(head,ta);
+    if(key==='note'){const details=el('details','ta-html-viewer'),sum=el('summary','','HTML preview'),frame=el('iframe','ta-note-frame');frame.title='Creator note preview';frame.setAttribute('sandbox','');frame.srcdoc=d.note;details.append(sum,frame);group.append(details);}
+    card.append(group);
+   });result.append(card);
+  });
+ }
+ generate.addEventListener('click',async()=>{
+  const names=selected();if(!names.length){status.textContent='Select characters in the Choose characters section first.';return;}
+  const x=getCtx();if(!x?.generateRaw){status.textContent='This SillyTavern version does not expose generateRaw().';return;}
+  const selectedChars=getChars().filter(c=>names.includes(charName(c)));generate.disabled=true;drafts.clear();draw();let count=0;
+  for(const c of selectedChars){try{
+   const d=cardData(c),cardText=[c.name,d.description,d.personality,d.scenario,d.first_mes,d.mes_example,d.creator_notes,d.system_prompt,d.post_history_instructions].filter(v=>typeof v==='string'&&v.trim()).join('\n\n').slice(0,30000);
+   const render=t=>t.replaceAll('{character_name}',charName(c)).replaceAll('{character_card}',cardText);
+   const common='Character: '+charName(c)+'\n\nCard reference:\n'+cardText;
+   const noteRaw=await x.generateRaw({systemPrompt:'Return only a valid JSON object with string keys subtitle, appearance, behavior, tagline. No markdown or commentary.',prompt:render(prompts.note)+'\n\n'+common});
+   const description=await x.generateRaw({systemPrompt:'Return only a revised character description. No preamble.',prompt:render(prompts.description)+'\n\n'+common});
+   const summary=await x.generateRaw({systemPrompt:'Return one nuanced personality summary paragraph only.',prompt:render(prompts.summary)+'\n\n'+common});
+   const obj=parseJSON(noteRaw);drafts.set(c.avatar,{name:charName(c),note:makeHTML(c,obj),description:String(description).trim(),summary:String(summary).trim()});
+  }catch(e){drafts.set(c.avatar,{name:charName(c),error:e.message});}
+  count++;status.textContent='Generated '+count+' of '+selectedChars.length+'. Review and approve each field below.';draw();
+  }
+  generate.disabled=false;
+ });
+ apply.addEventListener('click',async()=>{
+  apply.disabled=true;let saved=0,failed=0;
+  for(const card of result.querySelectorAll('.ta-content-card')){
+   const c=getChars().find(v=>v.avatar===card.dataset.avatar),draft=drafts.get(card.dataset.avatar);if(!c||!draft||draft.error)continue;
+   const fields={};for(const check of card.querySelectorAll('.ta-approve:checked')){const key=check.dataset.field,ta=card.querySelector('.ta-review-text[data-field="'+key+'"]');if(key==='note')fields.data={creator_notes:ta.value};if(key==='description')fields.description=ta.value;if(key==='summary')fields.personality=ta.value;}
+   if(!Object.keys(fields).length)continue;try{await save(c,fields);saved++;}catch(e){failed++;console.error(e);}
+  }
+  apply.disabled=false;status.textContent='Saved approved changes for '+saved+' character(s); '+failed+' failed. Unapproved fields were not changed.';
+ });
+}
+const observer=new MutationObserver(install);observer.observe(document.body,{childList:true,subtree:true});if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
+})();
