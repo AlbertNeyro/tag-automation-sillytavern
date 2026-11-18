@@ -261,17 +261,19 @@ function sanitizeNotesHtml(html) {
     return parsed.body.innerHTML;
 }
 
-function buildNotesHtml({ title, tagline, paragraphs, closing, img }) {
-    return `<div style="background:linear-gradient(to bottom, rgba(40,40,45,0.9), rgba(20,20,25,0.9));backdrop-filter:blur(5px);border-radius:10px;border:1px solid rgba(255,255,255,0.2);box-shadow:0px 0px 20px rgba(0,0,0,0.6);margin:20px 0;padding:20px;color:#e6e6e6;font-family:sans-serif">
-<p style="text-align:center;font-size:2em;font-weight:bold;margin:0.5em 0">${esc(title)}</p>
-<p style="text-align:center;font-size:1.2em;font-weight:bold;margin:0 0 1em 0">${esc(tagline)}</p>
+function buildNotesHtml({ title, tagline, paragraphs, closing, img, accent }) {
+    const theme = readableAccent(accent || '#cccccc');
+    const softTheme = theme + '55';
+    return `<div style="background:linear-gradient(to bottom, rgba(40,40,45,0.9), rgba(20,20,25,0.9));backdrop-filter:blur(5px);border-radius:10px;border:1px solid ${theme};box-shadow:0px 0px 20px ${softTheme};margin:20px 0;padding:20px;color:#e6e6e6;font-family:sans-serif">
+<p style="text-align:center;font-size:2em;font-weight:bold;margin:0.5em 0;color:${theme}">${esc(title)}</p>
+<p style="text-align:center;font-size:1.2em;font-weight:bold;margin:0 0 1em 0;color:${theme}">${esc(tagline)}</p>
 <img src="${esc(img)}" alt="${esc(title)}" style="display:block;margin:0 auto 1em auto;max-width:100%;border-radius:8px;">
-<hr style="border:1px solid rgba(255,255,255,0.2);margin:1em 0">
+<hr style="border:1px solid ${softTheme};margin:1em 0">
 ${paragraphs.map(p => '<p>\\n' + esc(p) + '\\n</p>').join('\\n')}
-<p style="text-align:center;font-weight:bold">
+<p style="text-align:center;font-weight:bold;color:${theme}">
 ${esc(closing)}
 </p>
-<hr style="border:1px solid rgba(255,255,255,0.2);margin:1em 0">
+<hr style="border:1px solid ${softTheme};margin:1em 0">
 </div>`;
 }
 async function genNotes(c, descriptionOverride) {
