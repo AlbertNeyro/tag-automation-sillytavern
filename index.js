@@ -216,9 +216,12 @@ async function genPersonality(c) {
 }
 
 /* ---- creator's notes ---- */
-const NOTES_SYSTEM = `You create detailed, character-specific SillyTavern creator notes as JSON. Return exactly one JSON object and no markdown fences:
-{"title":"character name","tagline":"short punchy epithet of 2-7 words","accent_color":"#rrggbb","paragraphs":["paragraph 1","paragraph 2","paragraph 3","paragraph 4","paragraph 5","paragraph 6"],"closing":"one memorable closing line"}
-Write 6-8 substantial paragraphs, normally 90-140 words each. The notes must be based ONLY on the supplied character description; do not use or invent details from creator notes, external sites, uploader credits, Botbooru, metadata, or unrelated fields. Make the prose specific to this character rather than generic. Follow the example layout's order: physical appearance and clothing; mannerisms and presence; temperament and emotional depth; values, motivations and contradictions; social behaviour and relationships as described; interaction with the reader and useful roleplay/story hooks. Be detailed and atmospheric while remaining faithful to the description. Choose one accent_color that suits the character's identity, mood, or visual palette and remains legible on a dark background. Do not include HTML in the JSON. Never sexualize a character who is under 18, childlike, or whose age is ambiguous; keep descriptions of such characters strictly non-sexual. Do not invent explicit anatomy or measurements that the description does not establish.`;
+const NOTES_SYSTEM = `You create concise, character-specific SillyTavern creator notes as JSON. Return exactly one valid JSON object and nothing else: no markdown fences, preamble, commentary, analysis, planning, or explanations.
+{"title":"character name","tagline":"short punchy epithet of 2-7 words","accent_color":"#rrggbb","paragraphs":["appearance paragraph","personality paragraph"],"closing":"one memorable closing line"}
+Write exactly TWO substantial paragraphs, around 90-140 words each. Keep the focus strictly on these two subjects:
+1. Appearance: describe visible physical features, build, face, hair, eyes, distinctive traits, clothing, and overall visual presence. Include only details supported by the supplied character description.
+2. Personality: describe temperament, emotional depth, mannerisms, values, motivations, strengths, flaws, contradictions, and characteristic social behaviour. Prioritize what makes this character distinctive.
+Do not add separate paragraphs about roleplay hooks, reader interaction, relationships, or general atmosphere. Include such details only when directly relevant to appearance or personality and supported by the description. Base everything ONLY on the supplied character description; do not use creator notes, external sites, uploader credits, Botbooru, metadata, or unrelated fields. Do not invent facts. Choose an accent_color that best fits the character's appearance, personality, identity, or visual palette, and ensure it remains legible on the dark background. Do not include HTML. Never sexualize a character who is under 18, childlike, or whose age is ambiguous; keep descriptions strictly non-sexual. Do not invent explicit anatomy or measurements absent from the source. Do not reveal internal reasoning or include drafting notes; output only the requested JSON object.`;
 
 function hexToRgb(h) {
     const m = /^#?([0-9a-f]{6})$/i.exec(String(h || '').trim());
@@ -278,10 +281,10 @@ ${esc(closing)}
 }
 async function genNotes(c, descriptionOverride) {
     const source = descriptionSourceText(c, descriptionOverride);
-    const out = await llm(NOTES_SYSTEM, "Write the complete creator's notes for this character. Return 6-8 detailed paragraphs. " + extra() + '\n\n' + source, 4096);
+    const out = await llm(NOTES_SYSTEM, "Write exactly two creator's-notes paragraphs: the first about appearance and the second about personality. Return only the requested JSON. " + extra() + '\n\n' + source, 2048);
     const j = parseJson(out);
     const paragraphs = (Array.isArray(j.paragraphs) ? j.paragraphs : []).filter(p => typeof p === 'string' && p.trim()).map(p => cleanSourceText(p)).filter(Boolean);
-    if (paragraphs.length < 6) throw new Error('The AI returned fewer than 6 creator-note paragraphs. Regenerate or edit the result before approval.');
+    if (paragraphs.length !== 2) throw new Error('The AI must return exactly 2 creator-note paragraphs: one about appearance and one about personality. Regenerate or edit the result before approval.');
     if (paragraphs.some(p => p.length < 350)) throw new Error('At least one creator-note paragraph is too short. Regenerate or edit the result before approval.');
     const f = {
         title: cleanSourceText(j.title || cname(c)), tagline: cleanSourceText(j.tagline || ''),
