@@ -59,8 +59,8 @@ function makeHTML(c,o){
  const paragraphs=String(o.sourceText||'').trim().split(/\r?\n\s*\r?\n/).filter(Boolean).map(v=>'<p style="line-height:1.55;margin:1em 0;white-space:pre-wrap">'+esc(v)+'</p>').join('');
  return '<div style="background:linear-gradient(to bottom,rgba(40,40,45,0.9),rgba(20,20,25,0.9));backdrop-filter:blur(5px);border-radius:10px;border:1px solid '+color+';box-shadow:0px 0px 20px rgba(0,0,0,0.6);margin:20px 0;padding:20px;color:#e6e6e6;font-family:sans-serif">'+
  '<p style="text-align:center;font-size:2em;font-weight:bold;margin:0.5em 0;color:'+color+'">'+esc(charName(c))+'</p>'+
- '<p style="text-align:center;font-size:1.2em;font-weight:bold;margin:0 0 1em 0">'+esc(o.subtitle||'')+'</p>'+
- '<img src="'+namedImage+'" alt="'+esc(charName(c))+'"'+imageFallback+' style="display:block;margin:0 auto 1em auto;max-width:100%;border-radius:8px;">'+
+ (o.subtitle?'<p style="text-align:center;font-size:1.2em;font-weight:bold;margin:0 0 1em 0">'+esc(o.subtitle)+'</p>':'')+
+ '<img src="'+avatarImage+'" alt="'+esc(charName(c))+'"'+imageFallback+' style="display:block;margin:0 auto 1em auto;max-width:100%;border-radius:8px;">'+
  '<hr style="border:1px solid rgba(255,255,255,0.2);margin:1em 0">'+paragraphs+
  (o.tagline?'<p style="text-align:center;font-weight:bold;color:'+color+'">'+esc(o.tagline)+'</p>':'')+
  '<hr style="border:1px solid rgba(255,255,255,0.2);margin:1em 0"></div>';
