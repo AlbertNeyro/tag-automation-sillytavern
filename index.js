@@ -231,7 +231,11 @@ function readableAccent(value) {
     while (luminance(rgb) < 0.32) rgb = rgb.map(v => Math.round(v + (255 - v) * 0.18));
     return '#' + rgb.map(v => v.toString(16).padStart(2, '0')).join('');
 }
-const imgFor = c => 'characters/' + encodeURIComponent(String(c.avatar || '').split('/').pop());
+const imgFor = c => {
+    const raw = String(c?.avatar || '').replace(/\\/g, '/').replace(/^\/+/, '');
+    const relative = raw.replace(/^characters\//i, '');
+    return 'characters/' + relative.split('/').map(encodeURIComponent).join('/');
+};
 
 function sanitizeNotesHtml(html) {
     const parsed = new DOMParser().parseFromString('<body>' + String(html || '') + '</body>', 'text/html');
@@ -257,20 +261,17 @@ function sanitizeNotesHtml(html) {
     return parsed.body.innerHTML;
 }
 
-function buildNotesHtml({ title, tagline, accent, paragraphs, closing, img }) {
-    const [r, g, b] = hexToRgb(accent);
-    const a = o => 'rgba(' + r + ',' + g + ',' + b + ',' + o + ')';
-    const hex = '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
-    return `<div style="background:linear-gradient(to bottom, rgba(40,40,45,0.9), rgba(20,20,25,0.9));backdrop-filter:blur(5px);border-radius:10px;border:1px solid ${a(0.55)};box-shadow:0px 0px 20px rgba(0,0,0,0.6), 0px 0px 14px ${a(0.25)};margin:20px 0;padding:20px;color:#e6e6e6;font-family:sans-serif">
+function buildNotesHtml({ title, tagline, paragraphs, closing, img }) {
+    return `<div style="background:linear-gradient(to bottom, rgba(40,40,45,0.9), rgba(20,20,25,0.9));backdrop-filter:blur(5px);border-radius:10px;border:1px solid rgba(255,255,255,0.2);box-shadow:0px 0px 20px rgba(0,0,0,0.6);margin:20px 0;padding:20px;color:#e6e6e6;font-family:sans-serif">
 <p style="text-align:center;font-size:2em;font-weight:bold;margin:0.5em 0">${esc(title)}</p>
-<p style="text-align:center;font-size:1.2em;font-weight:bold;margin:0 0 1em 0;color:${hex}">${esc(tagline)}</p>
-<img src="${esc(img)}" alt="${esc(title)}" referrerpolicy="no-referrer" loading="lazy" style="display:block;margin:0 auto 1em auto;max-width:100%;border-radius:8px;">
-<hr style="border:1px solid ${a(0.45)};margin:1em 0">
-${paragraphs.map(p => '<p>\n' + esc(p) + '\n</p>').join('\n')}
+<p style="text-align:center;font-size:1.2em;font-weight:bold;margin:0 0 1em 0">${esc(tagline)}</p>
+<img src="${esc(img)}" alt="${esc(title)}" style="display:block;margin:0 auto 1em auto;max-width:100%;border-radius:8px;">
+<hr style="border:1px solid rgba(255,255,255,0.2);margin:1em 0">
+${paragraphs.map(p => '<p>\\n' + esc(p) + '\\n</p>').join('\\n')}
 <p style="text-align:center;font-weight:bold">
 ${esc(closing)}
 </p>
-<hr style="border:1px solid ${a(0.45)};margin:1em 0">
+<hr style="border:1px solid rgba(255,255,255,0.2);margin:1em 0">
 </div>`;
 }
 async function genNotes(c, descriptionOverride) {
