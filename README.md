@@ -8,7 +8,7 @@ AI-powered batch tagging, character writing, and creator-metadata cleanup for Si
 - Review tag suggestions per character; existing tags are preselected.
 - Apply checked suggestions to selected cards, without duplicates; remove all top-level tags in bulk.
 - Clear embedded tags, character version, and creator notes in bulk while preserving creator name.
-- Generate character-specific creator notes using a fixed HTML design, plus revised descriptions and personality summaries.
+- Generate detailed, character-specific creator notes with an AI-selected accent color, plus revised descriptions using the requested structured character-profile template and a roughly 500-character appearance/personality summary.
 - Edit generation prompts, edit generated text/HTML, and preview creator-note HTML in a sandboxed viewer.
 - Preview existing saved creator notes without changing them.
 - Every generated field starts unapproved. Only individually checked fields are saved when Save approved changes is clicked.
@@ -31,7 +31,7 @@ Alternatively clone into SillyTavern/data/<user>/extensions/tag-automation-silly
 7. Use Preview existing creator notes to inspect currently saved notes in an isolated HTML viewer.
 
 ## Creator note layout
-The generated creator note follows the supplied dark gradient card design, including centered character name and subtitle, character image, divider, appearance paragraph, behavior paragraph, emphasized tagline, and closing divider. Text is HTML-escaped before insertion into the template.
+Creator notes use a character-matched accent color in a gradient card, centered name and subtitle, character artwork, and substantial sections for appearance, personality, background, relationships, and roleplay/story hooks. The image first attempts characters/[character name].[avatar extension], then falls back to the card's actual avatar filename. Generated text is HTML-escaped before insertion into the template.
 
 ## Metadata behavior
 The cleanup action can clear data.tags, data.character_version, and/or data.creator_notes. It never changes data.creator. Destructive bulk actions do not show confirmation dialogs; verify selected characters and fields before running them.
