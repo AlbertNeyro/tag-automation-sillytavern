@@ -49,18 +49,18 @@ summary:'Write a nuanced personality summary for {character_name} in this style:
 };
 const store=()=>{const x=getCtx();if(!x?.extensionSettings)return {};x.extensionSettings.tag_automation_sillytavern??={};return x.extensionSettings.tag_automation_sillytavern;};const prompts={...defaults,...(store().contentPrompts||{})}, drafts=new Map();
 function makeHTML(c,o){
- const avatar=String(c.avatar||'').split('/').pop(),match=avatar.match(/\\.[a-z0-9]{2,5}$/i),ext=match?match[0]:'.png';
- const safeName=String(charName(c)).replace(/[\\\\/:*?"<>|]/g,'_').trim()||'character';
+ const avatar=String(c.avatar||'').split('/').pop(),match=avatar.match(/\.[a-z0-9]{2,5}$/i),ext=match?match[0]:'.png';
+ const safeName=String(charName(c)).replace(/[\\/:*?"<>|]/g,'_').trim()||'character';
  const namedImage='characters/'+encodeURIComponent(safeName)+ext;
  const avatarImage='characters/'+String(c.avatar||'').split('/').map(encodeURIComponent).join('/');
  const color=/^#[0-9a-f]{6}$/i.test(String(o.accentColor||''))?o.accentColor:'#8b8b98';
- const paragraphs=[o.appearance,o.personality,o.background,o.relationships,o.narrativeHooks].filter(v=>String(v||'').trim()).map(v=>'<p style="line-height:1.55;margin:1em 0">'+esc(v)+'</p>').join('');
+ const paragraphs=String(o.sourceText||'').trim().split(/\r?\n\s*\r?\n/).filter(Boolean).map(v=>'<p style="line-height:1.55;margin:1em 0;white-space:pre-wrap">'+esc(v)+'</p>').join('');
  return '<div style="background:linear-gradient(to bottom,rgba(40,40,45,0.9),rgba(20,20,25,0.9));backdrop-filter:blur(5px);border-radius:10px;border:1px solid '+color+';box-shadow:0px 0px 20px rgba(0,0,0,0.6);margin:20px 0;padding:20px;color:#e6e6e6;font-family:sans-serif">'+
  '<p style="text-align:center;font-size:2em;font-weight:bold;margin:0.5em 0;color:'+color+'">'+esc(charName(c))+'</p>'+
- '<p style="text-align:center;font-size:1.2em;font-weight:bold;margin:0 0 1em 0">'+esc(o.subtitle)+'</p>'+
+ '<p style="text-align:center;font-size:1.2em;font-weight:bold;margin:0 0 1em 0">'+esc(o.subtitle||'')+'</p>'+
  '<img src="'+namedImage+'" alt="'+esc(charName(c))+'" onerror="this.onerror=null;this.src=\''+avatarImage+'\'" style="display:block;margin:0 auto 1em auto;max-width:100%;border-radius:8px;">'+
  '<hr style="border:1px solid rgba(255,255,255,0.2);margin:1em 0">'+paragraphs+
- '<p style="text-align:center;font-weight:bold;color:'+color+'">'+esc(o.tagline)+'</p>'+
+ (o.tagline?'<p style="text-align:center;font-weight:bold;color:'+color+'">'+esc(o.tagline)+'</p>':'')+
  '<hr style="border:1px solid rgba(255,255,255,0.2);margin:1em 0"></div>';
 }
 function parseJSON(raw){let s=String(raw||'').trim();const a=s.indexOf('{'),b=s.lastIndexOf('}');if(a<0||b<a)throw Error('The AI did not return the required JSON object.');return JSON.parse(s.slice(a,b+1));}
@@ -96,10 +96,10 @@ function install(){
    if(!existingDescription)throw Error('No existing character description. Add one before generating a revision.');
    if(!existingNotes)throw Error('No existing creator notes. Add creator notes before generating the HTML revision.');
    const render=(t,source)=>t.replaceAll('{character_name}',charName(c)).replaceAll('{character_card}',source);
-   const noteRaw=await x.generateRaw({systemPrompt:'Return only a valid JSON object with string keys subtitle, accentColor, appearance, personality, background, relationships, narrativeHooks, tagline. All values must be strings. Choose accentColor as a six-digit CSS hex color. Reorganize and polish only the supplied existing creator notes; do not add unsupported facts. No markdown or commentary.',prompt:render(prompts.note,existingNotes)+'\\n\\nEXISTING CREATOR NOTES (authoritative source):\\n'+existingNotes});
-   const description=await x.generateRaw({systemPrompt:'Return only a revised version of the supplied existing character description. Preserve its facts and intent; do not use other card fields as source material. No preamble.',prompt:render(prompts.description,existingDescription)+'\\n\\nEXISTING CHARACTER DESCRIPTION (authoritative source):\\n'+existingDescription});
+   const noteRaw=await x.generateRaw({systemPrompt:'Return only JSON with keys accentColor, subtitle, tagline. accentColor must be a six-digit hex color. Do not write, summarize, expand, or invent creator-note content. The existing notes will be inserted verbatim by the extension.',prompt:'Choose a fitting accent color for '+charName(c)+' using only these existing creator notes. Return {"accentColor":"#RRGGBB","subtitle":"","tagline":""}.\n'+existingNotes});
+   const description=await x.generateRaw({systemPrompt:'You are a faithful copy editor. Rewrite ONLY the supplied existing character description. Do not add, infer, embellish, extrapolate, or introduce any fact, trait, clothing item, physical feature, personality detail, location, or backstory that is not explicitly stated in the source. Preserve every source claim and its meaning. If a detail is absent, it must remain absent. Return only the edited description.',prompt:'Edit this existing description for clarity and flow only. Do not add content.\n\nSOURCE DESCRIPTION:\n'+existingDescription});
    const summary=await x.generateRaw({systemPrompt:'Return one nuanced personality summary paragraph only, based strictly on the existing character description. Do not invent facts.',prompt:render(prompts.summary,existingDescription)+'\\n\\nEXISTING CHARACTER DESCRIPTION:\\n'+existingDescription});
-   const obj=parseJSON(noteRaw);drafts.set(c.avatar,{name:charName(c),note:makeHTML(c,obj),description:String(description).trim(),summary:String(summary).trim()});
+   const obj=parseJSON(noteRaw);drafts.set(c.avatar,{name:charName(c),note:makeHTML(c,{...obj,sourceText:existingNotes}),description:String(description).trim(),summary:String(summary).trim()});
   }catch(e){drafts.set(c.avatar,{name:charName(c),error:e.message});}
   count++;status.textContent='Generated '+count+' of '+selectedChars.length+'. Review and approve each field below.';draw();
   }
