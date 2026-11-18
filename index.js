@@ -216,12 +216,12 @@ async function genPersonality(c) {
 }
 
 /* ---- creator's notes ---- */
-const NOTES_SYSTEM = `You create concise, character-specific SillyTavern creator notes as JSON. Return exactly one valid JSON object and nothing else: no markdown fences, preamble, commentary, analysis, planning, or explanations.
-{"title":"character name","tagline":"short punchy epithet of 2-7 words","accent_color":"#rrggbb","paragraphs":["appearance paragraph","personality paragraph"],"closing":"one memorable closing line"}
-Write exactly TWO substantial paragraphs, around 90-140 words each. Keep the focus strictly on these two subjects:
-1. Appearance: describe visible physical features, build, face, hair, eyes, distinctive traits, clothing, and overall visual presence. Include only details supported by the supplied character description.
-2. Personality: describe temperament, emotional depth, mannerisms, values, motivations, strengths, flaws, contradictions, and characteristic social behaviour. Prioritize what makes this character distinctive.
-Do not add separate paragraphs about roleplay hooks, reader interaction, relationships, or general atmosphere. Include such details only when directly relevant to appearance or personality and supported by the description. Base everything ONLY on the supplied character description; do not use creator notes, external sites, uploader credits, Botbooru, metadata, or unrelated fields. Do not invent facts. Choose an accent_color that best fits the character's appearance, personality, identity, or visual palette, and ensure it remains legible on the dark background. Do not include HTML. Never sexualize a character who is under 18, childlike, or whose age is ambiguous; keep descriptions strictly non-sexual. Do not invent explicit anatomy or measurements absent from the source. Do not reveal internal reasoning or include drafting notes; output only the requested JSON object.`;
+const NOTES_SYSTEM = `You create detailed, character-specific SillyTavern creator notes as JSON. Return exactly one valid JSON object and nothing else: no markdown fences, preamble, commentary, analysis, planning, or explanations.
+{"title":"character name","tagline":"short punchy epithet of 2-7 words","accent_color":"#rrggbb","background_color":"#rrggbb","paragraphs":["detailed appearance paragraph","detailed personality paragraph"],"closing":"one memorable closing line"}
+Write exactly TWO long, substantial paragraphs, around 160-220 words EACH. Do not be terse or summarize in a few sentences. Develop the details into a vivid, coherent portrait while remaining faithful to the source.
+1. Appearance (160-220 words): describe overall silhouette and proportions, body/build, posture and movement, face and expression, hair/fur/scales, eyes, distinctive anatomical or species traits, clothing (fit, material, colors, condition and style), accessories, and the visual impression the character makes. Use concrete descriptive language and explain how distinctive features fit together. Include only details supported by the supplied character description; do not invent anatomy.
+2. Personality (160-220 words): give a nuanced account of temperament, emotional depth, mannerisms, values, motivations, strengths, flaws, contradictions, habits, and characteristic social behaviour. Explain how these traits appear in interactions and under pressure, and what drives or complicates the character's behaviour. Prioritize specific, defining traits over generic adjectives. Include only details supported by the supplied character description.
+Do not add separate paragraphs about roleplay hooks, reader interaction, relationships, or general atmosphere. Include such details only when directly relevant to appearance or personality and supported by the description. Base everything ONLY on the supplied character description; do not use creator notes, external sites, uploader credits, Botbooru, metadata, or unrelated fields. Do not invent facts. Choose an accent_color that suits the character and remains legible against the background. Choose a background_color that complements the character's palette and mood; it MUST be a dark, muted color suitable for a dark HTML card, with enough contrast for light text and the accent color. The HTML background color must be selected by you, not left to a fixed default. Return both colors as six-digit hex values. Do not include HTML. Never sexualize a character who is under 18, childlike, or whose age is ambiguous; keep descriptions strictly non-sexual. Do not invent explicit anatomy or measurements absent from the source. Do not reveal internal reasoning or include drafting notes; output only the requested JSON object.`;
 
 function hexToRgb(h) {
     const m = /^#?([0-9a-f]{6})$/i.exec(String(h || '').trim());
@@ -264,32 +264,45 @@ function sanitizeNotesHtml(html) {
     return parsed.body.innerHTML;
 }
 
-function buildNotesHtml({ title, tagline, paragraphs, closing, img, accent }) {
+function readableBackground(value) {
+    let rgb = hexToRgb(value);
+    const luminance = c => c.map(v => { const x = v / 255; return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); }).reduce((a, v, i) => a + v * [0.2126, 0.7152, 0.0722][i], 0);
+    while (luminance(rgb) > 0.18) rgb = rgb.map(v => Math.round(v * 0.78));
+    return '#' + rgb.map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function buildNotesHtml({ title, tagline, paragraphs, closing, img, accent, background }) {
     const theme = readableAccent(accent || '#cccccc');
+    const base = readableBackground(background || '#28282d');
+    const rgb = hexToRgb(base);
+    const lower = '#' + rgb.map(v => Math.round(v * 0.58).toString(16).padStart(2, '0')).join('');
     const softTheme = theme + '55';
-    return `<div style="background:linear-gradient(to bottom, rgba(40,40,45,0.9), rgba(20,20,25,0.9));backdrop-filter:blur(5px);border-radius:10px;border:1px solid ${theme};box-shadow:0px 0px 20px ${softTheme};margin:20px 0;padding:20px;color:#e6e6e6;font-family:sans-serif">
-<p style="text-align:center;font-size:2em;font-weight:bold;margin:0.5em 0;color:${theme}">${esc(title)}</p>
-<p style="text-align:center;font-size:1.2em;font-weight:bold;margin:0 0 1em 0;color:${theme}">${esc(tagline)}</p>
-<img src="${esc(img)}" alt="${esc(title)}" style="display:block;margin:0 auto 1em auto;max-width:100%;border-radius:8px;">
+    const plain = value => esc(String(value ?? '').replace(/\\\\n/g, ' ').replace(/\\n/g, ' ').replace(/\\r/g, ' ').replace(/\\s+/g, ' ').trim());
+    return `<div style="background:linear-gradient(to bottom, ${base}, ${lower});backdrop-filter:blur(5px);border-radius:10px;border:1px solid ${theme};box-shadow:0px 0px 20px ${softTheme};margin:20px 0;padding:20px;color:#e6e6e6;font-family:sans-serif">
+<p style="text-align:center;font-size:2em;font-weight:bold;margin:0.5em 0;color:${theme}">${plain(title)}</p>
+<p style="text-align:center;font-size:1.2em;font-weight:bold;margin:0 0 1em 0;color:${theme}">${plain(tagline)}</p>
+<img src="${esc(img)}" alt="${plain(title)}" style="display:block;margin:0 auto 1em auto;max-width:100%;border-radius:8px;">
 <hr style="border:1px solid ${softTheme};margin:1em 0">
-${paragraphs.map(p => '<p>\\n' + esc(p) + '\\n</p>').join('\\n')}
+${paragraphs.map(p => '<p>' + plain(p) + '</p>').join('\\n')}
 <p style="text-align:center;font-weight:bold;color:${theme}">
-${esc(closing)}
+${plain(closing)}
 </p>
 <hr style="border:1px solid ${softTheme};margin:1em 0">
 </div>`;
 }
 async function genNotes(c, descriptionOverride) {
     const source = descriptionSourceText(c, descriptionOverride);
-    const out = await llm(NOTES_SYSTEM, "Write exactly two creator's-notes paragraphs: the first about appearance and the second about personality. Return only the requested JSON. " + extra() + '\n\n' + source, 2048);
+    const out = await llm(NOTES_SYSTEM, "Write exactly two long creator's-notes paragraphs of 160-220 words each: appearance first, personality second. Select both the accent and dark background colors for this character. Return only the requested JSON. " + extra() + '\\n\\n' + source, 3072);
     const j = parseJson(out);
-    const paragraphs = (Array.isArray(j.paragraphs) ? j.paragraphs : []).filter(p => typeof p === 'string' && p.trim()).map(p => cleanSourceText(p)).filter(Boolean);
+    const plain = value => String(value ?? '').replace(/\\\\n/g, ' ').replace(/\\n/g, ' ').replace(/\\r/g, ' ').replace(/\\s+/g, ' ').trim();
+    const paragraphs = (Array.isArray(j.paragraphs) ? j.paragraphs : []).filter(p => typeof p === 'string' && p.trim()).map(p => cleanSourceText(plain(p))).filter(Boolean);
     if (paragraphs.length !== 2) throw new Error('The AI must return exactly 2 creator-note paragraphs: one about appearance and one about personality. Regenerate or edit the result before approval.');
-    if (paragraphs.some(p => p.length < 350)) throw new Error('At least one creator-note paragraph is too short. Regenerate or edit the result before approval.');
+    const wordCounts = paragraphs.map(p => p.split(/\\s+/).filter(Boolean).length);
+    if (wordCounts.some(n => n < 120)) throw new Error('Both creator-note paragraphs must be substantial (at least 120 words each). Regenerate or expand the short paragraph before approval.');
     const f = {
-        title: cleanSourceText(j.title || cname(c)), tagline: cleanSourceText(j.tagline || ''),
+        title: plain(j.title || cname(c)), tagline: plain(j.tagline || ''),
         accent: readableAccent(/^#[0-9a-f]{6}$/i.test(j.accent_color) ? j.accent_color : '#cccccc'),
-        paragraphs, closing: cleanSourceText(j.closing || ''), img: imgFor(c),
+        background: readableBackground(/^#[0-9a-f]{6}$/i.test(j.background_color) ? j.background_color : '#28282d'),
+        paragraphs, closing: plain(j.closing || ''), img: imgFor(c),
     };
     if (!f.tagline || !f.closing) throw new Error('The AI omitted the creator-note tagline or closing line.');
     return { ...f, html: buildNotesHtml(f) };
