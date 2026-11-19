@@ -19,7 +19,7 @@ Name:[""], Age:[""], Gender:[""], Species:[""], Height:[""], Weight:[""], Figure
 
 Immediately after the filled template, provide an exactly 500-character natural-language summary of appearance and personality. The summary is separate from the template. Output only the profile and summary, with no preamble or commentary.]`;
 
-const DEFAULTS = { maxTags: 20, extraInstructions: '', descriptionPrompt: DEFAULT_DESCRIPTION_PROMPT };
+const DEFAULTS = { maxTags: 20, notesTokenLimit: 4096, extraInstructions: '', descriptionPrompt: DEFAULT_DESCRIPTION_PROMPT };
 
 /* ------------------------------------------------------------------ */
 /* Small helpers                                                       */
@@ -217,10 +217,10 @@ async function genPersonality(c) {
 
 /* ---- creator's notes ---- */
 const NOTES_SYSTEM = `You create detailed, character-specific SillyTavern creator notes as JSON. Return exactly one valid JSON object and nothing else: no markdown fences, preamble, commentary, analysis, planning, or explanations.
-{"title":"character name","tagline":"short punchy epithet of 2-7 words","accent_color":"#rrggbb","background_color":"#rrggbb","paragraphs":["detailed appearance paragraph","detailed personality paragraph"],"closing":"one memorable closing line"}
-Write exactly TWO long, substantial paragraphs, around 160-220 words EACH. Do not be terse or summarize in a few sentences. Develop the details into a vivid, coherent portrait while remaining faithful to the source.
-1. Appearance (160-220 words): describe overall silhouette and proportions, body/build, posture and movement, face and expression, hair/fur/scales, eyes, distinctive anatomical or species traits, clothing (fit, material, colors, condition and style), accessories, and the visual impression the character makes. Use concrete descriptive language and explain how distinctive features fit together. Include only details supported by the supplied character description; do not invent anatomy.
-2. Personality (160-220 words): give a nuanced account of temperament, emotional depth, mannerisms, values, motivations, strengths, flaws, contradictions, habits, and characteristic social behaviour. Explain how these traits appear in interactions and under pressure, and what drives or complicates the character's behaviour. Prioritize specific, defining traits over generic adjectives. Include only details supported by the supplied character description.
+{"title":"character name","tagline":"short punchy epithet of 2-7 words","accent_color":"#rrggbb","background_color":"#rrggbb","paragraphs":["appearance paragraph","personality paragraph"],"closing":"one memorable closing line"}
+Write exactly TWO substantial paragraphs. There is no required word count or minimum paragraph length. Use the available response budget to provide as much useful, grounded detail as the character description supports; do not pad, repeat information, or force unnecessary length.
+1. Appearance: describe overall silhouette and proportions, body/build, posture and movement, face and expression, hair/fur/scales, eyes, distinctive anatomical or species traits, clothing (fit, material, colors, condition and style), accessories, and the visual impression the character makes. Use concrete descriptive language and explain how distinctive features fit together. Include only details supported by the supplied character description; do not invent anatomy.
+2. Personality: give a nuanced account of temperament, emotional depth, mannerisms, values, motivations, strengths, flaws, contradictions, habits, and characteristic social behaviour. Explain how these traits appear in interactions and under pressure, and what drives or complicates the character's behaviour. Prioritize specific, defining traits over generic adjectives. Include only details supported by the supplied character description.
 Do not add separate paragraphs about roleplay hooks, reader interaction, relationships, or general atmosphere. Include such details only when directly relevant to appearance or personality and supported by the description. Base everything ONLY on the supplied character description; do not use creator notes, external sites, uploader credits, Botbooru, metadata, or unrelated fields. Do not invent facts. Choose an accent_color that suits the character and remains legible against the background. Choose a background_color that complements the character's palette and mood; it MUST be a dark, muted color suitable for a dark HTML card, with enough contrast for light text and the accent color. The HTML background color must be selected by you, not left to a fixed default. Return both colors as six-digit hex values. Do not include HTML. Never sexualize a character who is under 18, childlike, or whose age is ambiguous; keep descriptions strictly non-sexual. Do not invent explicit anatomy or measurements absent from the source. Do not reveal internal reasoning or include drafting notes; output only the requested JSON object.`;
 
 function hexToRgb(h) {
@@ -292,20 +292,12 @@ ${plain(closing)}
 async function genNotes(c, descriptionOverride) {
     const source = descriptionSourceText(c, descriptionOverride);
     const plain = value => String(value ?? '').replace(/\\\\n/g, ' ').replace(/\\n/g, ' ').replace(/\\r/g, ' ').replace(/\\s+/g, ' ').trim();
-    let j, paragraphs = [], wordCounts = [];
-    for (let attempt = 0; attempt < 3; attempt++) {
-        let prompt = "Write exactly two long creator's-notes paragraphs of 160-220 words each: appearance first, personality second. Select both the accent and dark background colors for this character. Return only the requested JSON. " + extra() + '\\n\\n' + source;
-        if (attempt > 0) {
-            prompt = "Revise the previous creator-notes draft. Keep the same character-specific facts, title, tagline, closing line, accent color, and background color. Expand any paragraph below 160 words with relevant detail grounded ONLY in the character description. Do not shorten paragraphs that are already substantial. Return the complete JSON object in the required schema, with exactly two paragraphs of 160-220 words each. Do not mention word counts or this revision.\\n\\nPrevious draft:\\n" + JSON.stringify(j) + "\\n\\nOriginal character description:\\n" + source;
-        }
-        const out = await llm(NOTES_SYSTEM, prompt, 4096);
-        j = parseJson(out);
-        paragraphs = (Array.isArray(j.paragraphs) ? j.paragraphs : []).filter(p => typeof p === 'string' && p.trim()).map(p => cleanSourceText(plain(p))).filter(Boolean);
-        if (paragraphs.length !== 2) throw new Error('The AI must return exactly 2 creator-note paragraphs: one about appearance and one about personality. Regenerate before approval.');
-        wordCounts = paragraphs.map(p => p.split(/\\s+/).filter(Boolean).length);
-        if (wordCounts.every(n => n >= 100)) break;
-    }
-    if (wordCounts.some(n => n < 100)) throw new Error('The AI repeatedly returned creator-note paragraphs that were too short. Please try generation again.');
+    const tokenLimit = Math.max(256, Math.min(16384, Math.round(Number(settings().notesTokenLimit) || DEFAULTS.notesTokenLimit)));
+    const prompt = "Write exactly two substantial creator's-notes paragraphs: appearance first, personality second. There is no word count requirement; use the configured response budget to provide as much relevant detail as the source supports. Select both the accent and dark background colors for this character. Return only the requested JSON. " + extra() + '\\n\\n' + source;
+    const out = await llm(NOTES_SYSTEM, prompt, tokenLimit);
+    const j = parseJson(out);
+    const paragraphs = (Array.isArray(j.paragraphs) ? j.paragraphs : []).filter(p => typeof p === 'string' && p.trim()).map(p => cleanSourceText(plain(p))).filter(Boolean);
+    if (paragraphs.length !== 2) throw new Error('The AI must return exactly 2 creator-note paragraphs: one about appearance and one about personality. Regenerate before approval.');
     const f = {
         title: plain(j.title || cname(c)), tagline: plain(j.tagline || ''),
         accent: readableAccent(/^#[0-9a-f]{6}$/i.test(j.accent_color) ? j.accent_color : '#cccccc'),
@@ -363,13 +355,15 @@ function build() {
     const field = (label, input) => { const l = node('label', 'ta-field'); l.append(node('span', '', label), input); return l; };
     const opts = node('details', 'ta-settings'), grid = node('div', 'ta-settings-grid');
     const maxIn = node('input', 'text_pole'); maxIn.type = 'number'; maxIn.min = 1; maxIn.max = 50; maxIn.value = settings().maxTags;
+    const notesTokensIn = node('input', 'text_pole'); notesTokensIn.type = 'number'; notesTokensIn.min = 256; notesTokensIn.max = 16384; notesTokensIn.step = 256; notesTokensIn.value = settings().notesTokenLimit;
     const extraIn = node('textarea', 'text_pole'); extraIn.rows = 2; extraIn.placeholder = 'e.g. Prefer concise English tags.'; extraIn.value = settings().extraInstructions;
     const promptIn = node('textarea', 'text_pole ta-code'); promptIn.rows = 10; promptIn.value = settings().descriptionPrompt;
     const resetPrompt = node('button', 'menu_button ta-button ta-button-quiet', 'Reset description prompt to default');
     const promptWrap = field('Description prompt (editable)', promptIn); promptWrap.classList.add('ta-wide'); promptWrap.append(resetPrompt);
-    grid.append(field('Maximum tags per character', maxIn), field('Additional instructions (all tasks)', extraIn), promptWrap);
+    grid.append(field('Maximum tags per character', maxIn), field("AI token limit per character's creator notes", notesTokensIn), field('Additional instructions (all tasks)', extraIn), promptWrap);
     opts.append(node('summary', '', 'Analysis settings & prompts'), grid);
     maxIn.addEventListener('change', () => { const s = settings(); s.maxTags = clampMax(maxIn.value); maxIn.value = s.maxTags; persist(); });
+    notesTokensIn.addEventListener('change', () => { const s = settings(); s.notesTokenLimit = Math.max(256, Math.min(16384, Math.round(Number(notesTokensIn.value) / 256) * 256 || DEFAULTS.notesTokenLimit)); notesTokensIn.value = s.notesTokenLimit; persist(); });
     extraIn.addEventListener('change', () => { settings().extraInstructions = extraIn.value.trim(); persist(); });
     promptIn.addEventListener('change', () => { settings().descriptionPrompt = promptIn.value.trim() || DEFAULT_DESCRIPTION_PROMPT; persist(); });
     resetPrompt.addEventListener('click', () => { promptIn.value = DEFAULT_DESCRIPTION_PROMPT; settings().descriptionPrompt = DEFAULT_DESCRIPTION_PROMPT; persist(); status(message, 'Description prompt reset to default.', 'success'); });
