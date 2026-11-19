@@ -291,13 +291,21 @@ ${plain(closing)}
 }
 async function genNotes(c, descriptionOverride) {
     const source = descriptionSourceText(c, descriptionOverride);
-    const out = await llm(NOTES_SYSTEM, "Write exactly two long creator's-notes paragraphs of 160-220 words each: appearance first, personality second. Select both the accent and dark background colors for this character. Return only the requested JSON. " + extra() + '\\n\\n' + source, 3072);
-    const j = parseJson(out);
     const plain = value => String(value ?? '').replace(/\\\\n/g, ' ').replace(/\\n/g, ' ').replace(/\\r/g, ' ').replace(/\\s+/g, ' ').trim();
-    const paragraphs = (Array.isArray(j.paragraphs) ? j.paragraphs : []).filter(p => typeof p === 'string' && p.trim()).map(p => cleanSourceText(plain(p))).filter(Boolean);
-    if (paragraphs.length !== 2) throw new Error('The AI must return exactly 2 creator-note paragraphs: one about appearance and one about personality. Regenerate or edit the result before approval.');
-    const wordCounts = paragraphs.map(p => p.split(/\\s+/).filter(Boolean).length);
-    if (wordCounts.some(n => n < 120)) throw new Error('Both creator-note paragraphs must be substantial (at least 120 words each). Regenerate or expand the short paragraph before approval.');
+    let j, paragraphs = [], wordCounts = [];
+    for (let attempt = 0; attempt < 3; attempt++) {
+        let prompt = "Write exactly two long creator's-notes paragraphs of 160-220 words each: appearance first, personality second. Select both the accent and dark background colors for this character. Return only the requested JSON. " + extra() + '\\n\\n' + source;
+        if (attempt > 0) {
+            prompt = "Revise the previous creator-notes draft. Keep the same character-specific facts, title, tagline, closing line, accent color, and background color. Expand any paragraph below 160 words with relevant detail grounded ONLY in the character description. Do not shorten paragraphs that are already substantial. Return the complete JSON object in the required schema, with exactly two paragraphs of 160-220 words each. Do not mention word counts or this revision.\\n\\nPrevious draft:\\n" + JSON.stringify(j) + "\\n\\nOriginal character description:\\n" + source;
+        }
+        const out = await llm(NOTES_SYSTEM, prompt, 4096);
+        j = parseJson(out);
+        paragraphs = (Array.isArray(j.paragraphs) ? j.paragraphs : []).filter(p => typeof p === 'string' && p.trim()).map(p => cleanSourceText(plain(p))).filter(Boolean);
+        if (paragraphs.length !== 2) throw new Error('The AI must return exactly 2 creator-note paragraphs: one about appearance and one about personality. Regenerate before approval.');
+        wordCounts = paragraphs.map(p => p.split(/\\s+/).filter(Boolean).length);
+        if (wordCounts.every(n => n >= 100)) break;
+    }
+    if (wordCounts.some(n => n < 100)) throw new Error('The AI repeatedly returned creator-note paragraphs that were too short. Please try generation again.');
     const f = {
         title: plain(j.title || cname(c)), tagline: plain(j.tagline || ''),
         accent: readableAccent(/^#[0-9a-f]{6}$/i.test(j.accent_color) ? j.accent_color : '#cccccc'),
