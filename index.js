@@ -131,11 +131,12 @@ async function clearTags(c) {
 /* ------------------------------------------------------------------ */
 /* AI calls                                                            */
 /* ------------------------------------------------------------------ */
-async function llm(system, prompt, length = 1024) {
+async function llm(system, prompt) {
     const x = ctx();
     if (typeof x?.generateRaw !== 'function') throw new Error('This SillyTavern version does not expose generateRaw().');
-    // Current SillyTavern API uses the options-object signature.
-    const out = await x.generateRaw({ prompt, systemPrompt: system, responseLength: length });
+    const responseLength = Math.max(256, Math.min(16384, Math.round(Number(settings().notesTokenLimit) || DEFAULTS.notesTokenLimit)));
+    // One configurable response budget is shared by every generation task.
+    const out = await x.generateRaw({ prompt, systemPrompt: system, responseLength });
     if (typeof out !== 'string' || !out.trim()) throw new Error('The AI returned an empty response.');
     return out.trim();
 }
@@ -292,9 +293,8 @@ ${plain(closing)}
 async function genNotes(c, descriptionOverride) {
     const source = descriptionSourceText(c, descriptionOverride);
     const plain = value => String(value ?? '').replace(/\\\\n/g, ' ').replace(/\\n/g, ' ').replace(/\\r/g, ' ').replace(/\\s+/g, ' ').trim();
-    const tokenLimit = Math.max(256, Math.min(16384, Math.round(Number(settings().notesTokenLimit) || DEFAULTS.notesTokenLimit)));
     const prompt = "Write exactly two substantial creator's-notes paragraphs: appearance first, personality second. There is no word count requirement; use the configured response budget to provide as much relevant detail as the source supports. Select both the accent and dark background colors for this character. Return only the requested JSON. " + extra() + '\\n\\n' + source;
-    const out = await llm(NOTES_SYSTEM, prompt, tokenLimit);
+    const out = await llm(NOTES_SYSTEM, prompt);
     const j = parseJson(out);
     const paragraphs = (Array.isArray(j.paragraphs) ? j.paragraphs : []).filter(p => typeof p === 'string' && p.trim()).map(p => cleanSourceText(plain(p))).filter(Boolean);
     if (paragraphs.length !== 2) throw new Error('The AI must return exactly 2 creator-note paragraphs: one about appearance and one about personality. Regenerate before approval.');
@@ -360,8 +360,8 @@ function build() {
     const promptIn = node('textarea', 'text_pole ta-code'); promptIn.rows = 10; promptIn.value = settings().descriptionPrompt;
     const resetPrompt = node('button', 'menu_button ta-button ta-button-quiet', 'Reset description prompt to default');
     const promptWrap = field('Description prompt (editable)', promptIn); promptWrap.classList.add('ta-wide'); promptWrap.append(resetPrompt);
-    grid.append(field('Maximum tags per character', maxIn), field("AI token limit per character's creator notes", notesTokensIn), field('Additional instructions (all tasks)', extraIn), promptWrap);
-    opts.append(node('summary', '', 'Analysis settings & prompts'), grid);
+    grid.append(field('Maximum tags per character', maxIn), field('AI response token limit (all generations)', notesTokensIn), field('Additional instructions (all tasks)', extraIn), promptWrap);
+    opts.append(node('summary', '', 'Generation settings & prompts'), node('p', 'ta-settings-help', 'The response token limit applies to tags, descriptions, personality summaries and creator notes.'), grid);
     maxIn.addEventListener('change', () => { const s = settings(); s.maxTags = clampMax(maxIn.value); maxIn.value = s.maxTags; persist(); });
     notesTokensIn.addEventListener('change', () => { const s = settings(); s.notesTokenLimit = Math.max(256, Math.min(16384, Math.round(Number(notesTokensIn.value) / 256) * 256 || DEFAULTS.notesTokenLimit)); notesTokensIn.value = s.notesTokenLimit; persist(); });
     extraIn.addEventListener('change', () => { settings().extraInstructions = extraIn.value.trim(); persist(); });
